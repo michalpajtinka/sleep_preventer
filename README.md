@@ -41,4 +41,6 @@ This script is meant to be cross-platform (although only Windows environment has
 
 ## ⚠️ Disclaimer
 
-This script overrides your power settings while running. Ensure your laptop is plugged into a power source if you plan to leave it running for extended periods to avoid unexpected battery drain.
+This script will not keep your Slack/MS Teams/any other communicator status green!
+This script will prevent your account from automatic locking, it is a serious security issue if you leave the device unguarded!
+This script overrides your power settings while running; ensure your laptop is plugged into a power source if you plan to leave it running for extended periods to avoid battery drain.
