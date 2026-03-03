@@ -1,0 +1,70 @@
+# Prevent screen/system sleep
+
+function Prevent-Sleep {
+	# $IsWindows, $IsLinuxand $IsMacOS are not present in older PS version 
+	Add-Type -AssemblyName System.Runtime.InteropServices
+	$onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+	$onLinux   = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)
+	$onMac     = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)
+	
+    if ($onWindows) {
+        # Windows: Use native Win32 API via Add-Type
+        $code =
+@"
+[DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+public static extern void SetThreadExecutionState(uint esFlags);
+"@
+
+		# Use Add-Type to create the Win32 caller
+		$caller = Add-Type -MemberDefinition $code -Name "SleepPreventer" -Namespace "Win32" -PassThru
+
+		# Define flags using a method that avoids the signed-integer overflow
+		# 0x80000000 is 2147483648
+		[uint32]$ES_CONTINUOUS       = [System.Convert]::ToUInt32("80000000", 16)
+		[uint32]$ES_DISPLAY_REQUIRED = 0x00000002
+		[uint32]$ES_SYSTEM_REQUIRED  = 0x00000001
+
+		$flags = $ES_CONTINUOUS -bor $ES_DISPLAY_REQUIRED -bor $ES_SYSTEM_REQUIRED
+
+		Write-Host "Preventing screen sleep... Press Ctrl+C to stop." -ForegroundColor Cyan
+
+		while($true) {
+			$caller::SetThreadExecutionState($flags)
+			Start-Sleep -Seconds 30
+		}
+    }
+    elseif ($onLinux) {
+        # Linux: Use systemd-inhibit or xset commands
+        $hasSystemdInhibit = (Get-Command systemd-inhibit -ErrorAction SilentlyContinue) -ne $null
+
+        if ($hasSystemdInhibit) {
+            Write-Host "Attempting to prevent sleep using systemd-inhibit... Press Ctrl+C to stop." -ForegroundColor Cyan
+            bash -c "systemd-inhibit --what=idle --why='PowerShell sleep prevention' sleep infinity"
+        }
+        else {
+            $hasXset = (Get-Command xset -ErrorAction SilentlyContinue) -ne $null
+
+            if ($hasXset) {
+                Write-Host "Attempting to prevent sleep screen saver and DPMS using xset... Press Ctrl+C to stop." -ForegroundColor Cyan
+                while ($true) {
+                    bash -c "xset s off"
+                    bash -c "xset -dpms"
+                    Start-Sleep -Seconds 30
+                }
+            }
+            else {
+                Write-Warning "Neither systemd-inhibit nor xset found. Not able prevent sleep on this Linux system."
+            }
+        }
+    }
+    elseif ($onMac) {
+        # macOS: Use caffeinate command
+        Write-Host "Attempting to prevent sleep using caffeinate... Press Ctrl+C to stop." -ForegroundColor Cyan
+        bash -c "caffeinate -dimsu"
+    }
+    else {
+        Write-Warning "Unsupported OS."
+    }
+}
+
+Prevent-Sleep
